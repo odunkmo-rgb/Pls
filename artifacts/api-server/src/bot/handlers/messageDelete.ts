@@ -4,7 +4,11 @@ import {
   Colors,
   TextChannel,
   EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
   type APIEmbed,
+  type APIActionRowComponent,
+  type APIMessageActionRowComponent,
 } from "discord.js";
 import { CONFIG } from "../config.js";
 import { buildEmbed, sendLog } from "../utils/logger.js";
@@ -13,9 +17,9 @@ interface CachedMessage {
   content: string;
   authorId: string;
   authorTag: string;
-  authorAvatar: string | null;
   channelId: string;
   embeds: APIEmbed[];
+  components: APIActionRowComponent<APIMessageActionRowComponent>[];
   attachmentUrls: string[];
 }
 
@@ -55,9 +59,9 @@ export function registerMessageDelete(client: Client): void {
       content: message.content,
       authorId: message.author.id,
       authorTag: message.author.tag,
-      authorAvatar: message.author.displayAvatarURL(),
       channelId: message.channelId,
       embeds: message.embeds.map((e) => e.toJSON()),
+      components: message.components.map((row) => row.toJSON()),
       attachmentUrls: message.attachments.map((a) => a.url),
     });
 
@@ -100,13 +104,19 @@ export function registerMessageDelete(client: Client): void {
           );
         }
 
-        if (restoreEmbeds.length > 0) {
-          const sentMessages = await channel.send({ embeds: restoreEmbeds });
-          restoredMessageIds.add(
-            Array.isArray(sentMessages) ? sentMessages[0]?.id ?? "" : sentMessages.id,
-          );
-        } else if (cached.attachmentUrls.length > 0) {
-          const sent = await channel.send(cached.attachmentUrls.join("\n"));
+        if (restoreEmbeds.length > 0 || cached.attachmentUrls.length > 0) {
+          const sendOptions: Parameters<typeof channel.send>[0] = {};
+
+          if (restoreEmbeds.length > 0) sendOptions.embeds = restoreEmbeds;
+          if (cached.attachmentUrls.length > 0) sendOptions.content = cached.attachmentUrls.join("\n");
+
+          if (cached.components.length > 0) {
+            sendOptions.components = cached.components.map((row) =>
+              ActionRowBuilder.from<ButtonBuilder>(row),
+            );
+          }
+
+          const sent = await channel.send(sendOptions);
           restoredMessageIds.add(sent.id);
         }
       }
@@ -119,7 +129,7 @@ export function registerMessageDelete(client: Client): void {
       const alertEmbed = buildEmbed({
         title: alertTitle,
         description: cached
-          ? `<@${cached.authorId}> tarafından gönderilen mesaj silindi ve **otomatik geri yüklendi**.`
+          ? `<@${cached.authorId}> tarafından gönderilen mesaj silindi ve **butonlarıyla birlikte otomatik geri yüklendi**.`
           : "Önbelleğe alınmamış bir mesaj silindi (geri yüklenemedi).",
         color: Colors.DarkRed,
         fields: [
@@ -127,6 +137,9 @@ export function registerMessageDelete(client: Client): void {
           { name: "Sunucu", value: guild.name, inline: true },
           ...(cached
             ? [{ name: "Gönderen", value: `${cached.authorTag} (<@${cached.authorId}>)`, inline: false }]
+            : []),
+          ...(cached?.components.length
+            ? [{ name: "Butonlar", value: "Geri yüklendi ✅", inline: true }]
             : []),
         ],
       });
