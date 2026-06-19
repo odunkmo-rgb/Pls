@@ -6,6 +6,7 @@ import {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
+  AuditLogEvent,
   type APIEmbed,
   type APIActionRowComponent,
   type APIMessageActionRowComponent,
@@ -26,27 +27,16 @@ interface CachedMessage {
 const messageCache = new Map<string, CachedMessage>();
 const restoredMessageIds = new Set<string>();
 
-async function dmAdmins(
+async function dmAllowed(
   client: Client,
   guildId: string,
   embed: EmbedBuilder,
 ): Promise<void> {
-  try {
-    const guild = await client.guilds.fetch(guildId);
-    const members = await guild.members.fetch();
-    for (const [, member] of members) {
-      const isAdmin = CONFIG.ADMIN_ROLE_IDS.some((id) =>
-        member.roles.cache.has(id),
-      );
-      if (!isAdmin) continue;
-      try {
-        await member.send({ embeds: [embed] });
-      } catch {
-        // DM kapalıysa geç
-      }
-    }
-  } catch {
-    // ignore
+  for (const userId of CONFIG.ALLOWED_USER_IDS) {
+    try {
+      const user = await client.users.fetch(userId);
+      await user.send({ embeds: [embed] });
+    } catch { /* DM kapalıysa geç */ }
   }
 }
 
@@ -83,6 +73,26 @@ export function registerMessageDelete(client: Client): void {
     const cached = messageCache.get(message.id);
     messageCache.delete(message.id);
 
+    // Kim sildi? Audit log'dan bul
+    let deletorId: string | null = null;
+    let deletorTag: string | null = null;
+    try {
+      await new Promise((r) => setTimeout(r, 800));
+      const auditLogs = await guild.fetchAuditLogs({
+        type: AuditLogEvent.MessageDelete,
+        limit: 5,
+      });
+      const entry = auditLogs.entries.find((e) => {
+        if (!e.executor) return false;
+        if ((e.extra as { channel?: { id?: string } })?.channel?.id !== message.channelId) return false;
+        return Date.now() - e.createdTimestamp < 10000;
+      });
+      if (entry?.executor) {
+        deletorId = entry.executor.id;
+        deletorTag = entry.executor.tag;
+      }
+    } catch { /* audit log erişilemedi */ }
+
     try {
       const channel = await guild.channels.fetch(message.channelId);
       if (!channel || !(channel instanceof TextChannel)) return;
@@ -106,16 +116,13 @@ export function registerMessageDelete(client: Client): void {
 
         if (restoreEmbeds.length > 0 || cached.attachmentUrls.length > 0) {
           const sendOptions: Parameters<typeof channel.send>[0] = {};
-
           if (restoreEmbeds.length > 0) sendOptions.embeds = restoreEmbeds;
           if (cached.attachmentUrls.length > 0) sendOptions.content = cached.attachmentUrls.join("\n");
-
           if (cached.components.length > 0) {
             sendOptions.components = cached.components.map((row) =>
               ActionRowBuilder.from<ButtonBuilder>(row),
             );
           }
-
           const sent = await channel.send(sendOptions);
           restoredMessageIds.add(sent.id);
         }
@@ -129,15 +136,20 @@ export function registerMessageDelete(client: Client): void {
       const alertEmbed = buildEmbed({
         title: alertTitle,
         description: cached
-          ? `<@${cached.authorId}> tarafından gönderilen mesaj silindi ve **butonlarıyla birlikte otomatik geri yüklendi**.`
+          ? `**Gönderen:** <@${cached.authorId}> tarafından yazılan mesaj silindi ve otomatik geri yüklendi.`
           : "Önbelleğe alınmamış bir mesaj silindi (geri yüklenemedi).",
         color: Colors.DarkRed,
         fields: [
           { name: "Kanal", value: `<#${message.channelId}>`, inline: true },
           { name: "Sunucu", value: guild.name, inline: true },
           ...(cached
-            ? [{ name: "Gönderen", value: `${cached.authorTag} (<@${cached.authorId}>)`, inline: false }]
+            ? [{ name: "Mesajı Yazan", value: `${cached.authorTag} (<@${cached.authorId}>)`, inline: false }]
             : []),
+          ...(deletorId && deletorId !== cached?.authorId
+            ? [{ name: "🗑️ Kim Sildi", value: `${deletorTag ?? deletorId} (<@${deletorId}>)`, inline: false }]
+            : deletorId
+            ? [{ name: "🗑️ Kim Sildi", value: "Kendi mesajını sildi", inline: false }]
+            : [{ name: "🗑️ Kim Sildi", value: "Belirlenemedi", inline: false }]),
           ...(cached?.components.length
             ? [{ name: "Butonlar", value: "Geri yüklendi ✅", inline: true }]
             : []),
@@ -145,7 +157,7 @@ export function registerMessageDelete(client: Client): void {
       });
 
       await sendLog(guild, alertEmbed);
-      await dmAdmins(client, guild.id, alertEmbed);
+      await dmAllowed(client, guild.id, alertEmbed);
     } catch (err) {
       console.error("messageDelete restore error:", err);
     }

@@ -9,6 +9,7 @@ import { registerGuildMemberRemove } from "./handlers/guildMemberRemove.js";
 import { registerChannelDelete } from "./handlers/channelDelete.js";
 import { registerChannelCreate } from "./handlers/channelCreate.js";
 import { registerRoleUpdate } from "./handlers/roleUpdate.js";
+import { registerServerEvents } from "./handlers/serverEvents.js";
 import { registerMessageDelete } from "./handlers/messageDelete.js";
 import { registerQuarantine } from "./handlers/quarantine.js";
 import { registerSlashCommands } from "./handlers/slashCommands.js";
@@ -42,6 +43,7 @@ export function startBot(): void {
   registerChannelDelete(client);
   registerChannelCreate(client);
   registerRoleUpdate(client);
+  registerServerEvents(client);
   registerMessageDelete(client);
   registerQuarantine(client);
   registerSlashCommands(client);

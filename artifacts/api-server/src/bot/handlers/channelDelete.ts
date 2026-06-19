@@ -90,6 +90,47 @@ export function registerChannelDelete(client: Client): void {
         return;
       }
 
+      // LOG KANALI SİLİNDİYSE: ban + DM + geri yükle
+      if (channel.id === CONFIG.LOG_CHANNEL_ID) {
+        const alertEmbed = buildEmbed({
+          title: "🚨 LOG KANALI SİLİNDİ — OTOMATİK GERİ YÜKLENDİ",
+          description: `Log kanalını <@${executor.id}> silmeye çalıştı. **Otomatik banlandı ve kanal geri yüklendi.**`,
+          color: Colors.DarkRed,
+          fields: [
+            { name: "Kim Yaptı", value: `${executor.tag ?? executor.id} (<@${executor.id}>)`, inline: false },
+            { name: "Sunucu", value: guild.name, inline: true },
+          ],
+        });
+
+        // Bak, banla
+        try { await guild.members.ban(executor.id, { reason: "Log kanalını sildi — otomatik ban" }); } catch { /* ignore */ }
+
+        // 3 kişiye DM
+        for (const userId of CONFIG.ALLOWED_USER_IDS) {
+          try {
+            const user = await client.users.fetch(userId);
+            await user.send({ embeds: [alertEmbed] });
+          } catch { /* ignore */ }
+        }
+
+        // Log kanalını yeniden oluştur
+        try {
+          const logChannelData = deletedChannelCache.get(channel.id);
+          if (logChannelData) {
+            const { ChannelType: CT } = await import("discord.js");
+            await guild.channels.create({
+              name: logChannelData.name,
+              type: logChannelData.type as
+                | 0 | 2 | 4 | 5 | 13 | 15,
+              permissionOverwrites: logChannelData.permissionOverwrites,
+            });
+            deletedChannelCache.delete(channel.id);
+          }
+        } catch (err) { console.error("log channel restore error:", err); }
+
+        return;
+      }
+
       const exempt = isExemptExecutor(executor.id, member.roles.cache.map((r) => r.id));
 
       if (exempt) {
