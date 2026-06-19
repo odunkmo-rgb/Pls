@@ -148,7 +148,7 @@ export async function restoreBackup(guild: Guild): Promise<string> {
 }
 
 export function scheduleNightlyBackup(client: Client): void {
-  cron.schedule("0 0 * * *", async () => {
+  cron.schedule("0 21 * * *", async () => {
     for (const [, guild] of client.guilds.cache) {
       try {
         const backup = await takeBackup(guild);

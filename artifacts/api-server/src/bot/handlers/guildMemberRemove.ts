@@ -6,7 +6,7 @@ import {
   GuildMember,
   PermissionFlagsBits,
 } from "discord.js";
-import { isExemptUser, recordAction } from "../utils/actionTracker.js";
+import { isExemptExecutor, recordAction } from "../utils/actionTracker.js";
 import { buildEmbed, sendLog } from "../utils/logger.js";
 
 export function registerGuildMemberRemove(client: Client): void {
@@ -38,7 +38,7 @@ export function registerGuildMemberRemove(client: Client): void {
         return;
       }
 
-      const exempt = isExemptUser(executor.id);
+      const exempt = isExemptExecutor(executor.id, execMember.roles.cache.map((r) => r.id));
 
       if (exempt) {
         await sendLog(

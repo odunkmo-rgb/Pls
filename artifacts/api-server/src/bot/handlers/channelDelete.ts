@@ -12,7 +12,7 @@ import {
   TextChannel,
   type PermissionOverwriteData,
 } from "discord.js";
-import { isExemptUser, recordAction } from "../utils/actionTracker.js";
+import { isExemptExecutor, recordAction } from "../utils/actionTracker.js";
 import { buildEmbed, sendLog } from "../utils/logger.js";
 import { CONFIG } from "../config.js";
 
@@ -90,7 +90,7 @@ export function registerChannelDelete(client: Client): void {
         return;
       }
 
-      const exempt = isExemptUser(executor.id);
+      const exempt = isExemptExecutor(executor.id, member.roles.cache.map((r) => r.id));
 
       if (exempt) {
         const logChannel = await guild.channels.fetch(CONFIG.LOG_CHANNEL_ID).catch(() => null);

@@ -5,7 +5,9 @@ export const CONFIG = {
     "774201775246147584",
   ],
 
-  EXEMPT_ROLE_IDS: [] as string[],
+  EXEMPT_ROLE_IDS: [
+    "1515760496425308300",
+  ],
 
   ADMIN_ROLE_IDS: [
     "1071486497699676281",

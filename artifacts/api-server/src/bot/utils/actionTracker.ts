@@ -8,14 +8,18 @@ interface ActionRecord {
 
 const tracker = new Map<string, ActionRecord>();
 
-export function isExempt(roleIds: string[]): boolean {
+export function isExemptUser(userId: string): boolean {
+  return (CONFIG.ALLOWED_USER_IDS as readonly string[]).includes(userId);
+}
+
+export function isExemptRole(roleIds: string[]): boolean {
   return roleIds.some((id) =>
     (CONFIG.EXEMPT_ROLE_IDS as readonly string[]).includes(id),
   );
 }
 
-export function isExemptUser(userId: string): boolean {
-  return (CONFIG.ALLOWED_USER_IDS as readonly string[]).includes(userId);
+export function isExemptExecutor(userId: string, roleIds: string[]): boolean {
+  return isExemptUser(userId) || isExemptRole(roleIds);
 }
 
 export function recordAction(
