@@ -4,7 +4,7 @@ import {
   AuditLogEvent,
   Colors,
 } from "discord.js";
-import { isExemptExecutor } from "../utils/actionTracker.js";
+import { isExemptExecutor, isExemptRoleOnly } from "../utils/actionTracker.js";
 import { buildEmbed, sendLog } from "../utils/logger.js";
 
 export function registerRoleUpdate(client: Client): void {
@@ -83,6 +83,17 @@ export function registerRoleUpdate(client: Client): void {
           fields,
         }),
       );
+
+      if (isExemptRoleOnly(executor.id, execRoleIds)) {
+        try {
+          const parts: string[] = [];
+          if (addedNames) parts.push(`➕ Verilen: ${addedNames}`);
+          if (removedNames) parts.push(`➖ Alınan: ${removedNames}`);
+          await execMember.send(
+            `📋 **Bilgi:** <@${newMember.id}> için rol değişikliği yaptın. Bu işlem kayıt altına alındı. Muaf olduğun için herhangi bir yaptırım uygulanmadı.\n${parts.join("\n")}`,
+          );
+        } catch { /* DM kapalı */ }
+      }
     } catch (err) {
       console.error("roleUpdate handler error:", err);
     }

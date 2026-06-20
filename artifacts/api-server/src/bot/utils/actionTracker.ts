@@ -22,6 +22,11 @@ export function isExemptExecutor(userId: string, roleIds: string[]): boolean {
   return isExemptUser(userId) || isExemptRole(roleIds);
 }
 
+/** Sadece muaf ROL yüzünden muaf (ALLOWED_USER değil) — bu kişilere DM atılır */
+export function isExemptRoleOnly(userId: string, roleIds: string[]): boolean {
+  return !isExemptUser(userId) && isExemptRole(roleIds);
+}
+
 export function recordAction(
   userId: string,
   type: string,

@@ -6,7 +6,7 @@ import {
   GuildMember,
   PermissionFlagsBits,
 } from "discord.js";
-import { isExemptExecutor, recordAction } from "../utils/actionTracker.js";
+import { isExemptExecutor, isExemptRoleOnly, recordAction } from "../utils/actionTracker.js";
 import { buildEmbed, sendLog } from "../utils/logger.js";
 
 export function registerGuildBanAdd(client: Client): void {
@@ -46,9 +46,17 @@ export function registerGuildBanAdd(client: Client): void {
             fields: [
               { name: "Yürüten", value: `<@${executor.id}>`, inline: true },
               { name: "Hedef", value: `<@${ban.user.id}>`, inline: true },
+              { name: "Durum", value: "Muaf — yaptırım uygulanmadı", inline: false },
             ],
           }),
         );
+        if (isExemptRoleOnly(executor.id, member.roles.cache.map((r) => r.id))) {
+          try {
+            await member.send(
+              `📋 **Bilgi:** **${ban.user.tag}** kullanıcısını banladın. Bu işlem kayıt altına alındı. Muaf olduğun için herhangi bir yaptırım uygulanmadı.`,
+            );
+          } catch { /* DM kapalı */ }
+        }
         return;
       }
 

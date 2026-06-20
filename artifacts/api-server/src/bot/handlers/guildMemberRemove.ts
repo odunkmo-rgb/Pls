@@ -6,7 +6,7 @@ import {
   GuildMember,
   PermissionFlagsBits,
 } from "discord.js";
-import { isExemptExecutor, recordAction } from "../utils/actionTracker.js";
+import { isExemptExecutor, isExemptRoleOnly, recordAction } from "../utils/actionTracker.js";
 import { buildEmbed, sendLog } from "../utils/logger.js";
 
 export function registerGuildMemberRemove(client: Client): void {
@@ -49,9 +49,17 @@ export function registerGuildMemberRemove(client: Client): void {
             color: Colors.Orange,
             fields: [
               { name: "Yürüten", value: `<@${executor.id}>`, inline: true },
+              { name: "Durum", value: "Muaf — yaptırım uygulanmadı", inline: false },
             ],
           }),
         );
+        if (isExemptRoleOnly(executor.id, execMember.roles.cache.map((r) => r.id))) {
+          try {
+            await execMember.send(
+              `📋 **Bilgi:** **${member.user?.tag ?? member.id}** kullanıcısını attın. Bu işlem kayıt altına alındı. Muaf olduğun için herhangi bir yaptırım uygulanmadı.`,
+            );
+          } catch { /* DM kapalı */ }
+        }
         return;
       }
 

@@ -12,7 +12,7 @@ import {
   TextChannel,
   type PermissionOverwriteData,
 } from "discord.js";
-import { isExemptExecutor, recordAction } from "../utils/actionTracker.js";
+import { isExemptExecutor, isExemptRoleOnly, recordAction } from "../utils/actionTracker.js";
 import { buildEmbed, sendLog } from "../utils/logger.js";
 import { CONFIG } from "../config.js";
 
@@ -147,10 +147,20 @@ export function registerChannelDelete(client: Client): void {
               title: "🗑️ Kanal Silindi",
               description: `**#${channelName}** kanalı silindi.`,
               color: Colors.Yellow,
-              fields: [{ name: "Yürüten", value: `<@${executor.id}>`, inline: true }],
+              fields: [
+                { name: "Yürüten", value: `<@${executor.id}>`, inline: true },
+                { name: "Durum", value: "Muaf — yaptırım uygulanmadı", inline: false },
+              ],
             })],
             components: [row],
           });
+        }
+        if (isExemptRoleOnly(executor.id, member.roles.cache.map((r) => r.id))) {
+          try {
+            await member.send(
+              `📋 **Bilgi:** **#${channelName}** kanalını sildin. Bu işlem kayıt altına alındı. Muaf olduğun için herhangi bir yaptırım uygulanmadı.`,
+            );
+          } catch { /* DM kapalı */ }
         }
         return;
       }
