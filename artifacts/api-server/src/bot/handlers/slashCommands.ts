@@ -11,12 +11,6 @@ import { CONFIG } from "../config.js";
 import { buildEmbed } from "../utils/logger.js";
 import { takeBackup, restoreBackup, getBackup } from "./backup.js";
 import { getYetkiliRolId, setYetkiliRolId } from "../utils/db.js";
-import {
-  addQuarantineUser,
-  removeQuarantineUser,
-  getQuarantineUsers,
-  applyQuarantineToMember,
-} from "./quarantine.js";
 import { resetUser, getRecord } from "../utils/actionTracker.js";
 
 const commands = [
@@ -35,33 +29,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName("yedek-bilgi")
     .setDescription("Son yedek hakkında bilgi göster")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .toJSON(),
-
-  new SlashCommandBuilder()
-    .setName("karantina-ekle")
-    .setDescription("Bir kullanıcıyı karantina listesine ekle")
-    .addUserOption((opt) =>
-      opt.setName("kullanici").setDescription("Karantinaya alınacak kullanıcı").setRequired(true),
-    )
-    .addStringOption((opt) =>
-      opt.setName("sebep").setDescription("Karantina sebebi").setRequired(false),
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .toJSON(),
-
-  new SlashCommandBuilder()
-    .setName("karantina-kaldir")
-    .setDescription("Bir kullanıcıyı karantina listesinden çıkar")
-    .addUserOption((opt) =>
-      opt.setName("kullanici").setDescription("Karantinadan çıkarılacak kullanıcı").setRequired(true),
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .toJSON(),
-
-  new SlashCommandBuilder()
-    .setName("karantina-liste")
-    .setDescription("Karantina listesini göster")
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .toJSON(),
 
@@ -156,8 +123,7 @@ export async function registerSlashCommands(client: Client): Promise<void> {
               { name: "Rol ID", value: rol.id, inline: true },
               {
                 name: "Koruma Kuralı",
-                value:
-                  "Bu role sahip kişiler birbirlerine moderasyon işlemi yapamaz.",
+                value: "Bu role sahip kişiler birbirlerine moderasyon işlemi yapamaz.",
                 inline: false,
               },
             ],
@@ -245,74 +211,6 @@ export async function registerSlashCommands(client: Client): Promise<void> {
         break;
       }
 
-      case "karantina-ekle": {
-        await interaction.deferReply({ ephemeral: true });
-        const user = interaction.options.getUser("kullanici", true);
-        const sebep = interaction.options.getString("sebep") ?? undefined;
-
-        await addQuarantineUser(user.id, interaction.user.id, sebep);
-        const applyResult = await applyQuarantineToMember(guild, user.id);
-
-        await interaction.editReply({
-          embeds: [
-            buildEmbed({
-              title: "🔒 Karantinaya Eklendi",
-              description: `<@${user.id}> karantina listesine eklendi.`,
-              color: Colors.Purple,
-              fields: [
-                { name: "Kullanıcı", value: user.tag, inline: true },
-                { name: "Sebep", value: sebep ?? "Belirtilmedi", inline: true },
-                { name: "Anlık Uygulama", value: applyResult.message, inline: false },
-              ],
-            }),
-          ],
-        });
-        break;
-      }
-
-      case "karantina-kaldir": {
-        await interaction.deferReply({ ephemeral: true });
-        const user = interaction.options.getUser("kullanici", true);
-        await removeQuarantineUser(user.id);
-        await interaction.editReply({
-          embeds: [
-            buildEmbed({
-              title: "🔓 Karantinadan Çıkarıldı",
-              description: `<@${user.id}> karantina listesinden çıkarıldı.`,
-              color: Colors.Green,
-              fields: [{ name: "Kullanıcı", value: user.tag, inline: true }],
-            }),
-          ],
-        });
-        break;
-      }
-
-      case "karantina-liste": {
-        await interaction.deferReply({ ephemeral: true });
-        const users = await getQuarantineUsers();
-        if (users.length === 0) {
-          await interaction.editReply({ content: "Karantina listesi boş." });
-          return;
-        }
-        const list = users
-          .slice(0, 20)
-          .map(
-            (u, i) =>
-              `${i + 1}. <@${u.user_id}> — ${u.reason ?? "Sebep yok"} (ekleyen: <@${u.added_by}>)`,
-          )
-          .join("\n");
-        await interaction.editReply({
-          embeds: [
-            buildEmbed({
-              title: `🔒 Karantina Listesi (${users.length} kişi)`,
-              description: list,
-              color: Colors.Purple,
-            }),
-          ],
-        });
-        break;
-      }
-
       case "sayac-sifirla": {
         const user = interaction.options.getUser("kullanici", true);
         resetUser(user.id);
@@ -357,7 +255,9 @@ export async function registerSlashCommands(client: Client): Promise<void> {
 
       case "yardim": {
         const yetkiliRolId = await getYetkiliRolId(guild.id);
-        const yetkiliRolStr = yetkiliRolId ? `<@&${yetkiliRolId}>` : "Henüz ayarlanmadı (`/ayarla-yetkilirol`)";
+        const yetkiliRolStr = yetkiliRolId
+          ? `<@&${yetkiliRolId}>`
+          : "Henüz ayarlanmadı (`/ayarla-yetkilirol`)";
 
         await interaction.reply({
           embeds: [
@@ -372,14 +272,9 @@ export async function registerSlashCommands(client: Client): Promise<void> {
                   inline: false,
                 },
                 {
-                  name: "🔒 Karantina",
-                  value:
-                    "`/karantina-ekle @kullanıcı [sebep]`\n`/karantina-kaldir @kullanıcı`\n`/karantina-liste`",
-                  inline: false,
-                },
-                {
                   name: "💾 Yedek",
-                  value: "`/yedek-al` — Anlık yedek\n`/restore` — Eksik kanalları geri yükle\n`/yedek-bilgi` — Son yedek bilgisi",
+                  value:
+                    "`/yedek-al` — Anlık yedek\n`/restore` — Eksik kanalları geri yükle\n`/yedek-bilgi` — Son yedek bilgisi",
                   inline: false,
                 },
                 {
@@ -388,7 +283,7 @@ export async function registerSlashCommands(client: Client): Promise<void> {
                   inline: false,
                 },
                 {
-                  name: "🛡️ Yetkili Rolü",
+                  name: "🛡️ Mevcut Yetkili Rolü",
                   value: yetkiliRolStr,
                   inline: false,
                 },
