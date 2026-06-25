@@ -13,6 +13,7 @@ import { registerServerEvents } from "./handlers/serverEvents.js";
 import { registerMessageDelete } from "./handlers/messageDelete.js";
 import { registerSlashCommands } from "./handlers/slashCommands.js";
 import { scheduleNightlyBackup } from "./handlers/backup.js";
+import { registerLinkGuard } from "./handlers/linkGuard.js";
 import { ensureSettingsTable } from "./utils/db.js";
 
 export function startBot(): void {
@@ -50,6 +51,7 @@ export function startBot(): void {
   registerRoleUpdate(client);
   registerServerEvents(client);
   registerMessageDelete(client);
+  registerLinkGuard(client);
   registerSlashCommands(client);
   scheduleNightlyBackup(client);
 

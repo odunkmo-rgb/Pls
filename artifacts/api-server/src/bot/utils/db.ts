@@ -29,9 +29,15 @@ export async function ensureSettingsTable(): Promise<void> {
     CREATE TABLE IF NOT EXISTS guild_settings (
       guild_id TEXT PRIMARY KEY,
       yetkili_rol_id TEXT,
+      link_engel_aktif BOOLEAN DEFAULT FALSE,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // Mevcut tablo varsa eksik kolonu ekle
+  await query(`
+    ALTER TABLE guild_settings
+    ADD COLUMN IF NOT EXISTS link_engel_aktif BOOLEAN DEFAULT FALSE
+  `).catch(() => { /* zaten varsa geç */ });
 }
 
 export async function getYetkiliRolId(guildId: string): Promise<string | null> {
@@ -52,5 +58,26 @@ export async function setYetkiliRolId(guildId: string, rolId: string): Promise<v
      VALUES ($1, $2)
      ON CONFLICT (guild_id) DO UPDATE SET yetkili_rol_id = $2, updated_at = NOW()`,
     [guildId, rolId],
+  );
+}
+
+export async function getLinkEngelAktif(guildId: string): Promise<boolean> {
+  try {
+    const rows = await query<{ link_engel_aktif: boolean }>(
+      "SELECT link_engel_aktif FROM guild_settings WHERE guild_id = $1",
+      [guildId],
+    );
+    return rows[0]?.link_engel_aktif ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export async function setLinkEngelAktif(guildId: string, aktif: boolean): Promise<void> {
+  await query(
+    `INSERT INTO guild_settings (guild_id, link_engel_aktif)
+     VALUES ($1, $2)
+     ON CONFLICT (guild_id) DO UPDATE SET link_engel_aktif = $2, updated_at = NOW()`,
+    [guildId, aktif],
   );
 }
