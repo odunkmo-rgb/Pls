@@ -14,6 +14,7 @@ import { registerMessageDelete } from "./handlers/messageDelete.js";
 import { registerQuarantine } from "./handlers/quarantine.js";
 import { registerSlashCommands } from "./handlers/slashCommands.js";
 import { scheduleNightlyBackup } from "./handlers/backup.js";
+import { ensureSettingsTable } from "./utils/db.js";
 
 export function startBot(): void {
   const token = process.env["DISCORD_TOKEN"];
@@ -36,6 +37,11 @@ export function startBot(): void {
       Partials.Channel,
       Partials.GuildMember,
     ],
+  });
+
+  // DB tablolarını başlat
+  ensureSettingsTable().catch((err) => {
+    console.error("guild_settings tablosu oluşturulamadı:", err);
   });
 
   registerGuildBanAdd(client);

@@ -6,8 +6,17 @@ import {
   GuildMember,
   PermissionFlagsBits,
 } from "discord.js";
-import { isExemptExecutor, isExemptRoleOnly, recordAction } from "../utils/actionTracker.js";
+import {
+  isExemptExecutor,
+  isExemptRoleOnly,
+  recordAction,
+  cacheMemberRoles,
+  getCachedMemberRoles,
+  isNonSpecialYetkili,
+  isTargetProtected,
+} from "../utils/actionTracker.js";
 import { buildEmbed, sendLog } from "../utils/logger.js";
+import { getYetkiliRolId } from "../utils/db.js";
 
 export function registerGuildBanAdd(client: Client): void {
   client.on(Events.GuildBanAdd, async (ban) => {
@@ -34,7 +43,45 @@ export function registerGuildBanAdd(client: Client): void {
         return;
       }
 
-      const exempt = isExemptExecutor(executor.id, member.roles.cache.map((r) => r.id));
+      const executorRoleIds = member.roles.cache.map((r) => r.id);
+      const yetkiliRolId = await getYetkiliRolId(guild.id);
+
+      // ── YETKİLİ KORUMA KONTROLÜ ──────────────────────────────────────────
+      // Executor özel kişi DEĞİL ama yetkili rolüne sahipse;
+      // hedef özel kişi veya yetkili ise → işlemi tersine çevir
+      if (isNonSpecialYetkili(executor.id, executorRoleIds, yetkiliRolId)) {
+        const targetRoleIds = getCachedMemberRoles(ban.user.id);
+        if (isTargetProtected(ban.user.id, targetRoleIds, yetkiliRolId)) {
+          // Banı geri al
+          try {
+            await guild.members.unban(ban.user.id, "Güvenlik: Yetkili koruma sistemi — yasadışı ban");
+          } catch { /* ignore */ }
+
+          await sendLog(
+            guild,
+            buildEmbed({
+              title: "🛡️ KORUMA — Yetkili Banı Engellendi",
+              description: `<@${executor.id}> kendi roldaşına veya üst yöneticiye ban uygulamaya çalıştı. **Ban otomatik kaldırıldı.**`,
+              color: Colors.Orange,
+              fields: [
+                { name: "Yürüten", value: `<@${executor.id}>`, inline: true },
+                { name: "Hedef", value: `<@${ban.user.id}> (${ban.user.tag})`, inline: true },
+                { name: "Durum", value: "⛔ Engellendi — Ban kaldırıldı", inline: false },
+              ],
+            }),
+          );
+
+          try {
+            await member.send(
+              "⛔ **Engellendi:** Kendi roldaşlarınıza veya üst yöneticilere moderasyon işlemi uygulayamazsınız!",
+            );
+          } catch { /* DM kapalı */ }
+          return;
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      const exempt = isExemptExecutor(executor.id, executorRoleIds);
 
       if (exempt) {
         await sendLog(
@@ -50,7 +97,7 @@ export function registerGuildBanAdd(client: Client): void {
             ],
           }),
         );
-        if (isExemptRoleOnly(executor.id, member.roles.cache.map((r) => r.id))) {
+        if (isExemptRoleOnly(executor.id, executorRoleIds)) {
           try {
             await member.send(
               `📋 **Bilgi:** **${ban.user.tag}** kullanıcısını banladın. Bu işlem kayıt altına alındı. Muaf olduğun için herhangi bir yaptırım uygulanmadı.`,

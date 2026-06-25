@@ -6,12 +6,25 @@ import {
   GuildMember,
   PermissionFlagsBits,
 } from "discord.js";
-import { isExemptExecutor, isExemptRoleOnly, recordAction } from "../utils/actionTracker.js";
+import {
+  isExemptExecutor,
+  isExemptRoleOnly,
+  recordAction,
+  cacheMemberRoles,
+  isNonSpecialYetkili,
+  isTargetProtected,
+} from "../utils/actionTracker.js";
 import { buildEmbed, sendLog } from "../utils/logger.js";
+import { getYetkiliRolId } from "../utils/db.js";
 
 export function registerGuildMemberRemove(client: Client): void {
   client.on(Events.GuildMemberRemove, async (member) => {
     const guild = member.guild;
+
+    // Ayrılan üyenin rollerini cache'le (GuildBanAdd için de kullanılır)
+    if ("roles" in member && member.roles) {
+      cacheMemberRoles(member.id, member.roles.cache.map((r) => r.id));
+    }
 
     await new Promise((r) => setTimeout(r, 1000));
 
@@ -38,7 +51,40 @@ export function registerGuildMemberRemove(client: Client): void {
         return;
       }
 
-      const exempt = isExemptExecutor(executor.id, execMember.roles.cache.map((r) => r.id));
+      const executorRoleIds = execMember.roles.cache.map((r) => r.id);
+      const yetkiliRolId = await getYetkiliRolId(guild.id);
+
+      // ── YETKİLİ KORUMA KONTROLÜ ──────────────────────────────────────────
+      if (isNonSpecialYetkili(executor.id, executorRoleIds, yetkiliRolId)) {
+        const targetRoleIds = "roles" in member && member.roles
+          ? member.roles.cache.map((r) => r.id)
+          : [];
+        if (isTargetProtected(member.id, targetRoleIds, yetkiliRolId)) {
+          await sendLog(
+            guild,
+            buildEmbed({
+              title: "🛡️ KORUMA — Yetkili Kick'i Engellendi",
+              description: `<@${executor.id}> kendi roldaşına veya üst yöneticiye kick uygulamaya çalıştı.`,
+              color: Colors.Orange,
+              fields: [
+                { name: "Yürüten", value: `<@${executor.id}>`, inline: true },
+                { name: "Hedef", value: `<@${member.id}> (${member.user?.tag ?? member.id})`, inline: true },
+                { name: "Durum", value: "⛔ Engellendi — Kayıt altına alındı", inline: false },
+              ],
+            }),
+          );
+
+          try {
+            await execMember.send(
+              "⛔ **Engellendi:** Kendi roldaşlarınıza veya üst yöneticilere moderasyon işlemi uygulayamazsınız!",
+            );
+          } catch { /* DM kapalı */ }
+          return;
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      const exempt = isExemptExecutor(executor.id, executorRoleIds);
 
       if (exempt) {
         await sendLog(
@@ -53,7 +99,7 @@ export function registerGuildMemberRemove(client: Client): void {
             ],
           }),
         );
-        if (isExemptRoleOnly(executor.id, execMember.roles.cache.map((r) => r.id))) {
+        if (isExemptRoleOnly(executor.id, executorRoleIds)) {
           try {
             await execMember.send(
               `📋 **Bilgi:** **${member.user?.tag ?? member.id}** kullanıcısını attın. Bu işlem kayıt altına alındı. Muaf olduğun için herhangi bir yaptırım uygulanmadı.`,
