@@ -106,88 +106,8 @@ export async function registerSlashCommands(client: Client): Promise<void> {
       if (!member) return;
 
       const isSpecial = (CONFIG.ALLOWED_USER_IDS as readonly string[]).includes(interaction.user.id);
-      const isOwner = guild.ownerId === interaction.user.id;
 
-      // ── /YARDIM ── herkese açık ──────────────────────────────────────────
-      if (commandName === "yardim") {
-        const yetkiliRolId = await getYetkiliRolId(guild.id);
-        const linkEngelAktif = await getLinkEngelAktif(guild.id);
-        const yetkiliRolStr = yetkiliRolId ? `<@&${yetkiliRolId}>` : "Henüz ayarlanmadı (`/ayarla-yetkilirol`)";
-        const botDurum = yetkiliRolId ? "🟢 Aktif" : "🔴 Kurulum Gerekli";
-
-        await interaction.reply({
-          embeds: [buildEmbed({
-            title: "📖 Bot Komutları",
-            description: "Güvenlik Botu — Tüm Slash Komutları",
-            color: Colors.Blurple,
-            fields: [
-              { name: "⚙️ Ayarlar (Kurucu/Sunucu Sahibi)", value: "`/ayarla-yetkilirol [rol]`\n`/link-engel [aç/kapat]`", inline: false },
-              { name: "💾 Yedek", value: "`/yedek-al` — Anlık yedek\n`/restore` — Eksik kanal+rolleri geri yükle\n`/yedek-bilgi` — Son yedek bilgisi", inline: false },
-              { name: "📊 Sayaç", value: "`/sayac-goruntule @kullanıcı`\n`/sayac-sifirla @kullanıcı`", inline: false },
-              { name: "🤖 Bot Durumu", value: botDurum, inline: true },
-              { name: "🛡️ Yetkili Rolü", value: yetkiliRolStr, inline: true },
-              { name: "🔗 Link Engeli", value: linkEngelAktif ? "🔴 Aktif" : "🟢 Kapalı", inline: true },
-            ],
-          })],
-          ephemeral: true,
-        });
-        return;
-      }
-
-      // ── /AYARLA-YETKİLİROL ── sadece kurucu veya sunucu sahibi ──────────────
-      if (commandName === "ayarla-yetkilirol") {
-        if (!isSpecial && !isOwner) {
-          await interaction.reply({
-            embeds: [buildEmbed({ title: "❌ Yetersiz Yetki", description: "Bu komutu sadece **kurucu kişiler** veya **sunucu sahibi** kullanabilir.", color: Colors.Red })],
-            ephemeral: true,
-          });
-          return;
-        }
-        const rol = interaction.options.getRole("rol", true);
-        await setYetkiliRolId(guild.id, rol.id);
-        await interaction.reply({
-          embeds: [buildEmbed({
-            title: "✅ Yetkili Rolü Ayarlandı",
-            description: `**${rol.name}** rolü yetkili rolü olarak kaydedildi.`,
-            color: Colors.Green,
-            fields: [
-              { name: "Rol", value: `<@&${rol.id}>`, inline: true },
-              { name: "Rol ID", value: rol.id, inline: true },
-              { name: "Koruma Kuralı", value: "Bu role sahip kişiler birbirlerine moderasyon işlemi yapamaz.", inline: false },
-            ],
-          })],
-          ephemeral: true,
-        });
-        return;
-      }
-
-      // ── /LINK-ENGEL ── sadece kurucu veya sunucu sahibi ─────────────────────
-      if (commandName === "link-engel") {
-        if (!isSpecial && !isOwner) {
-          await interaction.reply({
-            embeds: [buildEmbed({ title: "❌ Yetersiz Yetki", description: "Bu komutu sadece **kurucu kişiler** veya **sunucu sahibi** kullanabilir.", color: Colors.Red })],
-            ephemeral: true,
-          });
-          return;
-        }
-        const durum = interaction.options.getString("durum", true);
-        const aktif = durum === "ac";
-        await toggleLinkEngel(guild.id, aktif);
-
-        const embed = buildEmbed({
-          title: aktif ? "🔗 Link Engeli Açıldı" : "✅ Link Engeli Kapatıldı",
-          description: aktif
-            ? "Artık **3 kurucu kişi dışında** hiç kimse link paylaşamaz. Linkler otomatik silinir ve log kanalına düşer."
-            : "Link engeli kaldırıldı. Herkes link paylaşabilir.",
-          color: aktif ? Colors.Red : Colors.Green,
-        });
-
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-        await sendLog(guild, embed).catch(() => {});
-        return;
-      }
-
-      // ── Diğer komutlar için özel kişi kontrolü ───────────────────────────────
+      // ── Tüm komutlar için sadece 3 kurucu kontrolü ──────────────────────────
       if (!isSpecial) {
         await interaction.reply({
           embeds: [buildEmbed({ title: "❌ Yetersiz Yetki", description: "Bu komutu kullanma yetkiniz yok.", color: Colors.Red })],
@@ -198,6 +118,68 @@ export async function registerSlashCommands(client: Client): Promise<void> {
 
       // ── KOMUT İŞLEYİCİLER ───────────────────────────────────────────────────
       switch (commandName) {
+        case "ayarla-yetkilirol": {
+          const rol = interaction.options.getRole("rol", true);
+          await setYetkiliRolId(guild.id, rol.id);
+          await interaction.reply({
+            embeds: [buildEmbed({
+              title: "✅ Yetkili Rolü Ayarlandı",
+              description: `**${rol.name}** rolü yetkili rolü olarak kaydedildi.`,
+              color: Colors.Green,
+              fields: [
+                { name: "Rol", value: `<@&${rol.id}>`, inline: true },
+                { name: "Rol ID", value: rol.id, inline: true },
+                { name: "Koruma Kuralı", value: "Bu role sahip kişiler birbirlerine moderasyon işlemi yapamaz.", inline: false },
+              ],
+            })],
+            ephemeral: true,
+          });
+          break;
+        }
+
+        case "link-engel": {
+          const durum = interaction.options.getString("durum", true);
+          const aktif = durum === "ac";
+          await toggleLinkEngel(guild.id, aktif);
+
+          const embed = buildEmbed({
+            title: aktif ? "🔗 Link Engeli Açıldı" : "✅ Link Engeli Kapatıldı",
+            description: aktif
+              ? "Artık **3 kurucu kişi dışında** hiç kimse link paylaşamaz. Linkler otomatik silinir ve log kanalına düşer."
+              : "Link engeli kaldırıldı. Herkes link paylaşabilir.",
+            color: aktif ? Colors.Red : Colors.Green,
+          });
+
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+          await sendLog(guild, embed).catch(() => {});
+          break;
+        }
+
+        case "yardim": {
+          const yetkiliRolId = await getYetkiliRolId(guild.id);
+          const linkEngelAktif = await getLinkEngelAktif(guild.id);
+          const yetkiliRolStr = yetkiliRolId ? `<@&${yetkiliRolId}>` : "Henüz ayarlanmadı (`/ayarla-yetkilirol`)";
+          const botDurum = yetkiliRolId ? "🟢 Aktif" : "🔴 Kurulum Gerekli";
+
+          await interaction.reply({
+            embeds: [buildEmbed({
+              title: "📖 Bot Komutları",
+              description: "Güvenlik Botu — Tüm Slash Komutları",
+              color: Colors.Blurple,
+              fields: [
+                { name: "⚙️ Ayarlar", value: "`/ayarla-yetkilirol [rol]`\n`/link-engel [aç/kapat]`", inline: false },
+                { name: "💾 Yedek", value: "`/yedek-al` — Anlık yedek\n`/restore` — Eksik kanal+rolleri geri yükle\n`/yedek-bilgi` — Son yedek bilgisi", inline: false },
+                { name: "📊 Sayaç", value: "`/sayac-goruntule @kullanıcı`\n`/sayac-sifirla @kullanıcı`", inline: false },
+                { name: "🤖 Bot Durumu", value: botDurum, inline: true },
+                { name: "🛡️ Yetkili Rolü", value: yetkiliRolStr, inline: true },
+                { name: "🔗 Link Engeli", value: linkEngelAktif ? "🔴 Aktif" : "🟢 Kapalı", inline: true },
+              ],
+            })],
+            ephemeral: true,
+          });
+          break;
+        }
+
         case "yedek-al": {
           await interaction.deferReply({ ephemeral: true });
           const backup = await takeBackup(guild);
