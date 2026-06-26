@@ -102,9 +102,6 @@ export async function registerSlashCommands(client: Client): Promise<void> {
     if (!guild) return;
 
     try {
-      const member = await guild.members.fetch(interaction.user.id).catch(() => null);
-      if (!member) return;
-
       const isSpecial = (CONFIG.ALLOWED_USER_IDS as readonly string[]).includes(interaction.user.id);
 
       // ── Tüm komutlar için sadece 3 kurucu kontrolü ──────────────────────────
